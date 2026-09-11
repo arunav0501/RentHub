@@ -9,26 +9,24 @@ const authRoutes = require('./routes/auth.routes');
 const categoryRoutes = require('./routes/category.routes');
 const productRoutes = require('./routes/product.routes');
 const bookingRoutes = require('./routes/booking.routes');
+const aiListingRoutes = require('./routes/aiListing.routes');
 
 const app = express();
 
-// Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
-app.use(helmet({ crossOriginResourcePolicy: false })); // Allow loading images from same origin
+app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(morgan('dev'));
 
-// Static folder for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/ai-listing', aiListingRoutes);
 
-// Error Handling
 app.use(notFound);
 app.use(errorHandler);
 
