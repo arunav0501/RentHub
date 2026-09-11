@@ -1,14 +1,14 @@
-const OpenAI = require('openai');
+const { GoogleGenAI } = require('@google/genai');
 const fs = require('fs/promises');
 const path = require('path');
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const SUPPORTED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 const analyzeProductImage = async (filePath, categories) => {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured');
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured');
   }
 
   const absolutePath = path.resolve(filePath);
@@ -22,44 +22,46 @@ const analyzeProductImage = async (filePath, categories) => {
   const base64Image = imageBuffer.toString('base64');
   const categoryNames = categories.map(category => category.name);
 
-  const response = await client.responses.create({
-    model: process.env.OPENAI_VISION_MODEL || 'gpt-5.6-luna',
-    input: [{
-      role: 'user',
-      content: [
-        {
-          type: 'input_text',
-          text: `You are RentHub's listing assistant. Analyze the uploaded product image and suggest a rental listing. Only identify information that is reasonably visible or inferable from the image. Never invent an exact brand, model, condition, specifications, or price. If uncertain, use an empty string or a cautious generic value.\n\nAvailable categories: ${JSON.stringify(categoryNames)}\n\nReturn only JSON with these keys: title, description, categoryName, brand, model, condition.\n- title: concise marketplace title.\n- description: 2-4 sentence rental listing description.\n- categoryName: exactly one category from the available categories.\n- brand/model: only if clearly visible.\n- condition: one of New, Like New, Good, Fair, or empty if the image cannot establish condition.`
+  const prompt = `You are RentHub's listing assistant. Analyze the uploaded product image and suggest a rental listing. Only identify information that is reasonably visible or inferable from the image. Never invent an exact brand, model, condition, specifications, or price. If uncertain, use an empty string or a cautious generic value.
+
+Available categories: ${JSON.stringify(categoryNames)}
+
+Return a JSON object with these keys: title, description, categoryName, brand, model, condition.
+- title: concise marketplace title.
+- description: 2-4 sentence rental listing description.
+- categoryName: exactly one category from the available categories.
+- brand/model: only if clearly visible.
+- condition: one of New, Like New, Good, Fair, or empty if the image cannot establish condition.`;
+
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_VISION_MODEL || 'gemini-2.5-flash',
+    contents: [
+      {
+        inlineData: {
+          data: base64Image,
+          mimeType
+        }
+      },
+      { text: prompt }
+    ],
+    config: {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          description: { type: 'string' },
+          categoryName: { type: 'string' },
+          brand: { type: 'string' },
+          model: { type: 'string' },
+          condition: { type: 'string' }
         },
-        {
-          type: 'input_image',
-          image_url: `data:${mimeType};base64,${base64Image}`
-        }
-      ]
-    }],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'renthub_listing',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            title: { type: 'string' },
-            description: { type: 'string' },
-            categoryName: { type: 'string' },
-            brand: { type: 'string' },
-            model: { type: 'string' },
-            condition: { type: 'string' }
-          },
-          required: ['title', 'description', 'categoryName', 'brand', 'model', 'condition'],
-          additionalProperties: false
-        }
+        required: ['title', 'description', 'categoryName', 'brand', 'model', 'condition']
       }
     }
   });
 
-  const text = response.output_text;
+  const text = response.text;
   if (!text) {
     throw new Error('AI returned an empty response');
   }
