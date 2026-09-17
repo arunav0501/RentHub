@@ -8,7 +8,9 @@ router.use(protect);
 
 router.post('/', createBooking);
 router.get('/my-bookings', getMyBookings);
+router.get('/my-rentals', getMyBookings);
 router.get('/owner-requests', getOwnerRequests);
 router.put('/:id/status', updateBookingStatus);
+router.patch('/:id/status', updateBookingStatus);
 
 module.exports = router;

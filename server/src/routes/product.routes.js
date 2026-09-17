@@ -15,6 +15,7 @@ router.route('/')
   .get(getProducts)
   .post(protect, upload.single('image'), createProduct);
 
+router.get('/owner/me', protect, getMyProducts);
 router.get('/owner/my-products', protect, getMyProducts);
 
 router.route('/:id')

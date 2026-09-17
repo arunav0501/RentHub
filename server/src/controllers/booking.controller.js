@@ -6,11 +6,16 @@ const bookingSchema = z.object({
   productId: z.string(),
   startDate: z.string().transform((str) => new Date(str)),
   endDate: z.string().transform((str) => new Date(str)),
+  paymentMethod: z
+    .enum(['CREDIT_CARD', 'DEBIT_CARD', 'UPI', 'WALLET', 'CASH_ON_DELIVERY'])
+    .default('WALLET'),
+  paymentDetails: z.any().optional(),
 });
 
 // Create a booking
 exports.createBooking = asyncHandler(async (req, res) => {
-  const { productId, startDate, endDate } = bookingSchema.parse(req.body);
+  const { productId, startDate, endDate, paymentMethod, paymentDetails } =
+    bookingSchema.parse(req.body);
 
   const product = await prisma.product.findUnique({ where: { id: productId } });
   if (!product) return res.status(404).json({ message: 'Product not found' });
@@ -21,7 +26,72 @@ exports.createBooking = asyncHandler(async (req, res) => {
   const days = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
   if (days <= 0) return res.status(400).json({ message: 'End date must be after start date' });
 
-  const totalPrice = days * product.dailyRent;
+  // Compute total price (dailyRent * days + 12% protection fee + refundable deposit)
+  const baseRental = days * product.dailyRent;
+  const protectionFee = Math.round(baseRental * 0.12);
+  const deposit = Math.round(product.dailyRent * 1.5);
+  const totalPrice = baseRental + protectionFee + deposit;
+
+  let paymentStatus = 'PENDING';
+  let paymentRef = null;
+  let initialStatus = 'PENDING';
+
+  // Process payment based on method
+  if (paymentMethod === 'WALLET') {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { walletBalance: true },
+    });
+
+    if (!user || user.walletBalance < totalPrice) {
+      return res.status(400).json({
+        message: `Insufficient RentHub Wallet balance. Total needed: ₹${totalPrice}, Available: ₹${
+          user?.walletBalance ?? 0
+        }. Please add funds to your wallet.`,
+      });
+    }
+
+    const refSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    paymentRef = `TXN-RH-WLT-${Date.now()}-${refSuffix}`;
+
+    // Deduct from wallet & create transaction
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: req.user.id },
+        data: { walletBalance: { decrement: totalPrice } },
+      }),
+      prisma.walletTransaction.create({
+        data: {
+          userId: req.user.id,
+          amount: totalPrice,
+          type: 'DEBIT',
+          category: 'RENTAL_PAYMENT',
+          description: `Rental payment for ${product.title} (${days} days)`,
+          paymentMethod: 'WALLET',
+          referenceId: paymentRef,
+          status: 'COMPLETED',
+        },
+      }),
+    ]);
+
+    paymentStatus = 'PAID';
+    initialStatus = 'APPROVED';
+  } else if (paymentMethod === 'CREDIT_CARD' || paymentMethod === 'DEBIT_CARD') {
+    const cardLast4 = paymentDetails?.cardNumber ? paymentDetails.cardNumber.slice(-4) : '••••';
+    const refSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    paymentRef = `TXN-RH-CRD-${Date.now()}-${refSuffix}`;
+    paymentStatus = 'PAID';
+    initialStatus = 'APPROVED';
+  } else if (paymentMethod === 'UPI') {
+    const refSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    paymentRef = `TXN-RH-UPI-${Date.now()}-${refSuffix}`;
+    paymentStatus = 'PAID';
+    initialStatus = 'APPROVED';
+  } else if (paymentMethod === 'CASH_ON_DELIVERY') {
+    paymentRef = `COD-RH-${Date.now().toString(36).toUpperCase()}`;
+    paymentStatus = 'CASH_ON_DELIVERY';
+    initialStatus = 'PENDING';
+  }
 
   const booking = await prisma.booking.create({
     data: {
@@ -30,10 +100,14 @@ exports.createBooking = asyncHandler(async (req, res) => {
       startDate,
       endDate,
       totalPrice,
+      status: initialStatus,
+      paymentMethod,
+      paymentStatus,
+      paymentRef,
     },
     include: {
       product: true,
-    }
+    },
   });
 
   res.status(201).json(booking);
@@ -61,7 +135,7 @@ exports.getOwnerRequests = asyncHandler(async (req, res) => {
     },
     include: {
       product: true,
-      user: { select: { name: true, email: true, phone: true } }
+      user: { select: { id: true, name: true, email: true, phone: true } }
     },
     orderBy: { createdAt: 'desc' }
   });

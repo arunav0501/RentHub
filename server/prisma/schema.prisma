@@ -8,16 +8,19 @@ datasource db {
 }
 
 model User {
-  id        String    @id @default(uuid())
-  name      String
-  email     String    @unique
-  password  String
-  phone     String?
-  role      String    @default("USER") // USER or OWNER
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  products  Product[]
-  bookings  Booking[]
+  id                 String              @id @default(uuid())
+  name               String
+  email              String              @unique
+  password           String
+  phone              String?
+  role               String              @default("USER") // USER or OWNER
+  walletBalance      Float               @default(1500.0)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  products           Product[]
+  bookings           Booking[]
+  reviews            Review[]
+  walletTransactions WalletTransaction[]
 }
 
 model Category {
@@ -27,36 +30,71 @@ model Category {
 }
 
 model Product {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   title       String
-  description String
+  description String    @db.Text
   categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
+  category    Category  @relation(fields: [categoryId], references: [id])
   dailyRent   Float
   location    String
-  quantity    Int      @default(1)
+  quantity    Int       @default(1)
   condition   String
   brand       String?
   model       String?
   image       String?
   ownerId     String
-  owner       User     @relation(fields: [ownerId], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  owner       User      @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   bookings    Booking[]
+  reviews     Review[]
 }
 
 model Booking {
-  id         String   @id @default(uuid())
-  productId  String
-  userId     String
-  startDate  DateTime
-  endDate    DateTime
-  totalPrice Float
-  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED, CANCELLED
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            String   @id @default(uuid())
+  productId     String
+  userId        String
+  startDate     DateTime
+  endDate       DateTime
+  totalPrice    Float
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED, COMPLETED, CANCELLED
+  paymentMethod String?  // CREDIT_CARD, DEBIT_CARD, UPI, WALLET, CASH_ON_DELIVERY
+  paymentStatus String   @default("PENDING") // PENDING, PAID, CASH_ON_DELIVERY, FAILED, REFUNDED
+  paymentRef    String?  // Transaction reference ID
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review        Review?
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int      // 1 to 5
+  comment   String   @db.Text
+  productId String
+  userId    String
+  bookingId String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+}
+
+model WalletTransaction {
+  id            String   @id @default(uuid())
+  userId        String
+  amount        Float
+  type          String   // CREDIT, DEBIT
+  category      String   // TOPUP, WITHDRAWAL, RENTAL_PAYMENT, RENTAL_EARNING, REFUND
+  description   String
+  paymentMethod String?  // UPI, CARD, WALLET, BANK_TRANSFER
+  referenceId   String   // Transaction reference ID (e.g. TXN-RH-...)
+  status        String   @default("COMPLETED") // COMPLETED, PENDING, FAILED
+  createdAt     DateTime @default(now())
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

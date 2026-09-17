@@ -20,7 +20,7 @@ const getProducts = asyncHandler(async (req, res) => {
 
   const products = await prisma.product.findMany({
     where,
-    include: { category: true, owner: { select: { name: true, email: true } } },
+    include: { category: true, owner: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: 'desc' }
   });
   res.json(products);
@@ -29,7 +29,7 @@ const getProducts = asyncHandler(async (req, res) => {
 const getProductById = asyncHandler(async (req, res) => {
   const product = await prisma.product.findUnique({
     where: { id: req.params.id },
-    include: { category: true, owner: { select: { name: true, email: true } } }
+    include: { category: true, owner: { select: { id: true, name: true, email: true } } }
   });
 
   if (product) {
