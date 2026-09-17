@@ -1,15 +1,64 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 const prisma = new PrismaClient();
 
 async function main() {
-  const owner = await prisma.user.findFirst({
+  console.log('Seeding Supabase PostgreSQL database...');
+
+  // 1. Ensure Default Categories Exist
+  const defaultCategories = [
+    'Photography & Cameras',
+    'Audio & Music',
+    'Camping & Outdoor Gear',
+    'Electric Vehicles',
+    'Tools & Equipment',
+  ];
+
+  for (const catName of defaultCategories) {
+    await prisma.category.upsert({
+      where: { name: catName },
+      update: {},
+      create: { name: catName },
+    });
+  }
+  console.log('✓ Categories ensured');
+
+  // 2. Ensure Demo Owner Exists
+  const hashedPassword = await bcrypt.hash('password123', 10);
+  let owner = await prisma.user.findFirst({
     where: { role: 'OWNER' },
   });
 
   if (!owner) {
-    console.error('No owner found');
-    return;
+    owner = await prisma.user.upsert({
+      where: { email: 'owner@renthub.com' },
+      update: {},
+      create: {
+        name: 'Arunav (Owner)',
+        email: 'owner@renthub.com',
+        password: hashedPassword,
+        phone: '+91 9876543210',
+        role: 'OWNER',
+        walletBalance: 12500.0,
+      },
+    });
+    console.log('✓ Created demo owner user:', owner.email);
   }
+
+  // 3. Ensure Demo Renter Exists
+  await prisma.user.upsert({
+    where: { email: 'user@renthub.com' },
+    update: {},
+    create: {
+      name: 'Renter Explorer',
+      email: 'user@renthub.com',
+      password: hashedPassword,
+      phone: '+91 9123456780',
+      role: 'USER',
+      walletBalance: 5000.0,
+    },
+  });
+  console.log('✓ Created demo renter user');
 
   // Find categories
   const categories = await prisma.category.findMany();
