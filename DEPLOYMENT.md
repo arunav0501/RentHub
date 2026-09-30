@@ -129,4 +129,4 @@ Once deployed, verify the live app:
 - [ ] Top Header Wallet -> Open the RentHub Wallet modal, add ₹500 test balance.
 - [ ] Product Checkout -> Go to a product, choose duration, select payment method (UPI, Card, Wallet, or COD), and confirm booking.
 - [ ] Leave Review -> Complete a rental in the dashboard and submit a 5-star rating with review text.
-- [ ] AI Trip Planner -> Enter a destination (e.g. "Manali 4 days") and verify AI generates packing recommendations with rental equipment matches.
+- [ ] Smart Rental Planner -> Enter equipment needs or trip plans (e.g. "Manali 4 days" or "piano and guitar") and verify AI generates rental equipment checklist with live inventory matches.
